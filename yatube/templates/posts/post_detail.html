@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Пост {{ post.text|truncatechars:30 }}.{% endblock %}
+
+{% block content %}
+<div class="row">
+  <aside class="col-12 col-md-3">
+    <ul class="list-group list-group-flush">
+      <li class="list-group-item">
+        Дата публикации: {{ post.pub_date|date:"d E Y" }}
+      </li>
+  
+        <li class="list-group-item">
+          {% if post.group.slug %}
+            Группа: <b>{{ post.group.slug }}</b>
+            <br>
+            <a 
+              href="{% url 'posts:group_list' post.group.slug %}">
+                все записи группы
+            </a>
+          {% else %}
+          Группа: отсутсвует
+          {% endif %}
+        </li>
+        <li class="list-group-item">
+          Автор: <b>{{ post.author.get_full_name }}</b>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+        Всего постов автора:  <span>{{ posts_count }}</span>
+      </li>
+      <li class="list-group-item">
+        <a href="{% url 'posts:profile' post.author %}">
+          все посты пользователя
+        </a>
+      </li>
+    </ul>
+  </aside>
+  <article class="col-12 col-md-9">
+    <p>
+      {{ post.text }}
+    </p>
+    {% if user == post.author %}
+    <a 
+      class="btn btn-primary" 
+      href="{% url "posts:post_edit" post.id %}"
+    >
+      редактировать запись
+    </a>
+    <!-- Button trigger modal -->
+    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#exampleModal">
+      удалить пост
+    </button>
+    <!-- Button trigger modal -->
+    {% endif %}
+  </article>
+</div>
+
+<!-- Modal -->
+{% include 'posts/includes/modal_delete.html' %}
+
+{% endblock %}
+
+{% include 'includes/footer.html' %}
