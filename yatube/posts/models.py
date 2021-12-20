@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.template.defaultfilters import slugify
 from django.urls import reverse
-from pytils.translit import slugify
 
 User = get_user_model()
 
@@ -50,7 +50,15 @@ class Group(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.title)[:200]
+            new_slug = self.title.translate(
+                str.maketrans(
+                    "абвгдеёжзийклмнопрстуфхцчшщъыьэюя\
+                        +АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ",
+                    "abvgdeejzijklmnoprstufhzcss_y_eua\
+                        +ABVGDEEJZIJKLMNOPRSTUFHZCSS_Y_EUA"
+                )
+            )
+            self.slug = slugify(new_slug)[:200]
         if Group.objects.filter(slug=self.slug).exists():
             raise ValidationError(
                 f'Адрес "{self.slug}" уже существует, '
