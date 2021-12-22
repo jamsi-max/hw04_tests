@@ -27,7 +27,6 @@ class StaticURLTests(TestCase):
         )
 
         cls.post = Post.objects.create(
-            id=1,
             text='Текст тестового поста',
             author=cls.user
         )
@@ -40,9 +39,9 @@ class StaticURLTests(TestCase):
         """URL-адрес использует соответствующий шаблон."""
         templates_url_names = {
             '/': 'posts/index.html',
-            '/group/test-slug/': 'posts/group_list.html',
-            '/profile/test_user/': 'posts/profile.html',
-            '/posts/1/': 'posts/post_detail.html',
+            f'/group/{StaticURLTests.group.slug}/': 'posts/group_list.html',
+            f'/profile/{StaticURLTests.user}/': 'posts/profile.html',
+            f'/posts/{StaticURLTests.post.id}/': 'posts/post_detail.html',
         }
 
         for adress, template in templates_url_names.items():
@@ -54,7 +53,7 @@ class StaticURLTests(TestCase):
     def test_urls_uses_correct_template_authorized_client(self):
         """URL-адрес использует соответствующий шаблон."""
         templates_url_names = {
-            '/posts/1/edit/': 'posts/create_post.html',
+            f'/posts/{StaticURLTests.post.id}/edit/': 'posts/create_post.html',
             '/create/': 'posts/create_post.html',
         }
 
@@ -65,10 +64,17 @@ class StaticURLTests(TestCase):
                 self.assertTemplateUsed(response, template)
 
     def test_post_edit_url_redirect_anonymous(self):
-        """Страница /posts/1/edit/ перенаправляет анонимного пользователя."""
-        response = self.guest_client.get('/posts/1/edit/')
+        """
+        Страница /posts/<post_id>/edit/
+        перенаправляет анонимного пользователя.
+        """
+        response = self.guest_client.get(
+            f'/posts/{StaticURLTests.post.id}/edit/'
+        )
         self.assertRedirects(
-            response, reverse('users:login') + '?next=/posts/1/edit/'
+            response,
+            reverse('users:login')
+            + f'?next=/posts/{StaticURLTests.post.id}/edit/'
         )
 
     def test_post_create_url_redirect_anonymous(self):

@@ -1,13 +1,12 @@
 # posts/tests/tests_form.py
 import shutil
 import tempfile
+from http import HTTPStatus
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-
-from posts.forms import PostForm
 from posts.models import Group, Post
 
 User = get_user_model()
@@ -36,8 +35,6 @@ class PostFormTests(TestCase):
             author=PostFormTests.user,
             group=PostFormTests.group
         )
-        # Создаем форму
-        cls.form = PostForm()
 
     @classmethod
     def tearDownClass(cls):
@@ -50,52 +47,109 @@ class PostFormTests(TestCase):
         self.authorized_client = Client()
         self.authorized_client.force_login(PostFormTests.user)
 
+        # Создаем не авторизованный клиент
+        self.guest_client = Client()
+
     def test_create_post(self):
         """Валидная форма создает запись в Post."""
         # Подсчитаем количество записей в Post
         posts_count = Post.objects.count()
-        form_data = {
+        form_data_create = {
             'text': '2 - Тестовый текст поста',
             'group': PostFormTests.group.id,
         }
-        # Отправляем POST-запрос
-        response = self.authorized_client.post(
+        # Проверяем что не авторизованый клиент не может создать пост
+        response = self.guest_client.post(
             reverse('posts:post_create'),
-            data=form_data,
+            data=form_data_create,
             follow=True
         )
         # Проверяем, сработал ли редирект
         self.assertRedirects(
             response,
-            reverse('posts:profile', kwargs={'username': 'userTest'})
+            reverse('users:login')
+            + '?next=/create/'
+        )
+        # Проверяем, что число постов не увеличилось
+        self.assertNotEqual(Post.objects.count(), posts_count + 1)
+        # Проверяем что пост не создан
+        self.assertFalse(
+            Post.objects.filter(
+                text=form_data_create['text']).exists()
+        )
+
+        # Отправляем POST-запрос
+        response = self.authorized_client.post(
+            reverse('posts:post_create'),
+            data=form_data_create,
+            follow=True
+        )
+        # Проверяем статус ответа
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+        # Проверяем, сработал ли редирект
+        self.assertRedirects(
+            response,
+            reverse('posts:profile', kwargs={'username': PostFormTests.user})
         )
         # Проверяем, увеличилось ли число постов
         self.assertEqual(Post.objects.count(), posts_count + 1)
-        # Проверяем, что создалась запись
-        self.assertTrue(
-            Post.objects.filter(
-                text='2 - Тестовый текст поста',
-                author=PostFormTests.user,
-                group=PostFormTests.group.id,
-            ).exists()
+        # Проверяем, что создалась запись и по очередно поля
+        new_post = Post.objects.get(text=form_data_create['text'])
+        self.assertEqual(form_data_create['text'], new_post.text)
+        self.assertEqual(form_data_create['group'], new_post.group.id)
+        self.assertEqual(PostFormTests.user, new_post.author)
+
+        # Проверяем что не авторизованый клиент не может создать пост
+        response = self.guest_client.post(
+            reverse('posts:post_create'),
+            data=form_data_create,
+            follow=True
+        )
+        # Проверяем статус ответа
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+        # Проверяем, сработал ли редирект
+        self.assertRedirects(
+            response,
+            reverse('users:login') + '?next=/create/'
         )
 
     def test_edit_post(self):
         """Валидная форма изменяет запись в Post."""
         # Подсчитаем количество записей в Post
         posts_count = Post.objects.count()
-        form_data = {
+        form_data_edit = {
             'text': 'Измененный текст тестового поста',
             'group': PostFormTests.group.id,
         }
+        # Проверяем что не авторизованый клиент не может изменить пост
+        response = self.guest_client.post(
+            reverse(
+                'posts:post_edit',
+                kwargs={'post_id': PostFormTests.post.id}
+            ),
+            data=form_data_edit,
+            follow=True
+        )
+        # Проверяем, сработал ли редирект
+        self.assertRedirects(
+            response,
+            reverse('users:login')
+            + f'?next=/posts/{PostFormTests.post.id}/edit/'
+        )
+        # Проверяем изменился ли пост
+        self.assertNotEqual(form_data_edit['text'], PostFormTests.post.text)
+
+        # Проверка для авторизованного пользователя
         response = self.authorized_client.post(
             reverse(
                 'posts:post_edit',
                 kwargs={'post_id': PostFormTests.post.id}
             ),
-            data=form_data,
+            data=form_data_edit,
             follow=True
         )
+        # Проверяем статус ответа
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         # Проверяем, сработал ли редирект
         self.assertRedirects(
             response,
@@ -103,24 +157,8 @@ class PostFormTests(TestCase):
         )
         # Проверяем, что число постов не увеличилось
         self.assertEqual(Post.objects.count(), posts_count)
-        # Проверяем, что запись изменилась
-        self.assertTrue(
-            Post.objects.filter(
-                text='Измененный текст тестового поста',
-            ).exists()
-        )
-
-    # Тестирование лейблов
-    def test_title_label(self):
-        title_label = PostFormTests.form.fields['text'].label
-        group_label = PostFormTests.form.fields['group'].label
-        self.assertEqual(title_label, 'Текст поста')
-        self.assertEqual(group_label, 'Выбор группы')
-
-    def test_title_help_text(self):
-        title_help_text = PostFormTests.form.fields['text'].help_text
-        group_help_text = PostFormTests.form.fields['group'].help_text
-        self.assertEqual(
-            group_help_text, 'Группа, к которой будет относиться пост'
-        )
-        self.assertEqual(title_help_text, 'Текст нового поста')
+        # Проверяем, что запись изменилась и по очередно поля
+        new_post = Post.objects.get(text=form_data_edit['text'])
+        self.assertEqual(form_data_edit['text'], new_post.text)
+        self.assertEqual(form_data_edit['group'], new_post.group.id)
+        self.assertEqual(PostFormTests.user, new_post.author)
