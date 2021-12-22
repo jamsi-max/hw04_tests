@@ -110,7 +110,8 @@ class PostFormTests(TestCase):
         # Проверяем, сработал ли редирект
         self.assertRedirects(
             response,
-            reverse('users:login') + '?next=/create/'
+            reverse('users:login')
+            + '?next=' + reverse('posts:post_create')
         )
 
     def test_edit_post(self):
@@ -134,7 +135,11 @@ class PostFormTests(TestCase):
         self.assertRedirects(
             response,
             reverse('users:login')
-            + f'?next=/posts/{PostFormTests.post.id}/edit/'
+            + '?next='
+            + reverse(
+                'posts:post_edit',
+                kwargs={'post_id': PostFormTests.post.id}
+            )
         )
         # Проверяем изменился ли пост
         self.assertNotEqual(form_data_edit['text'], PostFormTests.post.text)
